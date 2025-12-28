@@ -1,0 +1,14 @@
+.DS_Store
+Thumbs.db
+
+*.log
+*.tmp
+*.bak
+*.swp
+
+
+*.zip
+
+
+apex_export*.log
+.fuse_hidden*
