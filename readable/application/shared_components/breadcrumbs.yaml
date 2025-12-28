@@ -1,0 +1,38 @@
+---
+- # ====== Breadcrumb: Breadcrumb ==============================
+  id: 123189750976044967475
+  identification: 
+    name: Breadcrumb
+
+  entries: 
+  - # ====== Entry: Home =========================================
+    id: 123196458379029543330
+    identification: 
+      name: Home
+      page-number: 1
+
+    execution: 
+      sequence: 10
+
+    link: 
+      target: 
+        url: 'f?p=&APP_ID.:1:&APP_SESSION.::&DEBUG.:::'
+        page: 1 # Project Silicium -UEFI on ARM Devices
+
+  - # ====== Entry: Supported Devices ============================
+    id: 123370752839999952093
+    identification: 
+      name: Supported Devices
+      page-number: 2
+
+    execution: 
+      sequence: 10
+
+    appearance: 
+      parent-entry: Home # 123196458379029543330
+
+    link: 
+      target: 
+        url: 'f?p=&APP_ID.:2:&APP_SESSION.::&DEBUG.:::'
+        page: 2 # Supported Devices
+

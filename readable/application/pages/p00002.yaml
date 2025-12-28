@@ -1,0 +1,689 @@
+---
+# ====== Page: Supported Devices =============================
+id: 2
+identification: 
+  name: Supported Devices
+  alias: SUPPORTED-DEVICES
+  title: Supported Devices
+
+appearance: 
+  page-mode: Normal
+  page-template: Theme Default
+  template-options: 
+  - '#DEFAULT#'
+
+navigation-menu: 
+  override-user-interface-level: false
+
+navigation: 
+  cursor-focus: Do not focus cursor
+  warn-on-unsaved-changes: true
+
+javascript: 
+  execute-when-page-loads: |
+    (function($){
+      $(document).ready(function(){
+    
+    (function($){
+    
+      // ----- HELPER RENDERERS -----
+      function renderSoCs(list){
+        var $wrap = $('<div class="ps-soc-items"></div>');
+        list.forEach(function(s){
+          var $it = $('<div class="ps-item" data-soc-id="'+s.id+'"><div class="label">'+s.name+'</div><div class="sub-arrow">▸</div></div>');
+          $wrap.append($it);
+        });
+        return $wrap;
+      }
+    
+      function renderManufacturers(list){
+        var $wrap = $('<div></div>');
+        list.forEach(function(m){
+          var $blk = $('<div class="ps-manufacturer-block" data-manufacturer-id="'+m.id+'"><div class="ps-manufacturer-title">'+m.name+'</div><div class="ps-device-list"></div></div>');
+          $wrap.append($blk);
+        });
+        return $wrap;
+      }
+    
+      function renderDevices(list){
+        var $wrap = $('<div></div>');
+        list.forEach(function(d){
+          $wrap.append('<div class="ps-device">'+d.name + (d.other_info ? ' — ' + d.other_info : '') +'</div>');
+        });
+        return $wrap;
+      }
+    
+      // ----- CATEGORY CLICK -----
+      $('#ps-supported').on('click', '.ps-category > .ps-cat-label', function(){
+        var $catBox = $(this).closest('.ps-category');
+        var catName = $catBox.data('category');
+        var $child = $catBox.find('.ps-child').first();
+    
+        var isOpen = $child.is(':visible');
+        $('.ps-child').not($child).slideUp(180);
+        $('.ps-arrow').css('transform','rotate(0deg)');
+    
+        if(isOpen){
+          $child.slideUp(180);
+          $(this).find('.ps-arrow').css('transform','rotate(0deg)');
+          $('#ps-detail').empty();
+          return;
+        } else {
+          $(this).find('.ps-arrow').css('transform','rotate(90deg)');
+        }
+    
+        $child.slideDown(200);
+    
+        if($child.data('loaded') !== 'true'){
+          $child.html('<div class="ps-loading">Loading SoCs…</div>');
+          apex.server.process('GET_SOCs', { x01: catName }, { dataType: 'json' })
+            .done(function(res){
+              $child.empty();
+              if(Array.isArray(res) && res.length){
+                $child.append(renderSoCs(res));
+              } else {
+                $child.append('<div class="ps-loading">No SoCs found.</div>');
+              }
+              $child.data('loaded','true');
+            })
+            .fail(function(err){
+              $child.html('<div class="ps-loading">Error loading SoCs</div>');
+              console.error(err);
+            });
+        }
+      });
+    
+      // ----- SOC CLICK -----
+      $('#ps-supported').on('click', '.ps-soc-items .ps-item', function(){
+        var socId = $(this).data('soc-id');
+        $('.ps-soc-items .ps-item').removeClass('active');
+        $(this).addClass('active');
+    
+        var $detail = $('#ps-detail');
+        $detail.html('<div class="ps-loading">Loading manufacturers…</div>');
+    
+        apex.server.process('GET_MANUFACTURERS', { x01: socId }, { dataType: 'json' })
+          .done(function(res){
+            $detail.empty();
+            if(Array.isArray(res) && res.length){
+              $detail.append(renderManufacturers(res));
+            } else {
+              $detail.append('<div class="ps-loading">No manufacturers found.</div>');
+            }
+          })
+          .fail(function(err){
+            $detail.html('<div class="ps-loading">Error loading manufacturers</div>');
+            console.error(err);
+          });
+      });
+    
+      // ----- MANUFACTURER CLICK -----
+      $('#ps-supported').on('click', '.ps-manufacturer-block .ps-manufacturer-title', function(){
+        var $blk = $(this).closest('.ps-manufacturer-block');
+        var manufacturerId = $blk.data('manufacturer-id');
+        var socId = $('.ps-soc-items .ps-item.active').data('soc-id');
+    
+        if(!socId){
+          alert('Select an SoC first');
+          return;
+        }
+    
+        var $deviceList = $blk.find('.ps-device-list');
+        $deviceList.html('<div class="ps-loading">Loading devices…</div>');
+    
+        apex.server.process('GET_DEVICES', { x01: socId, x02: manufacturerId }, { dataType: 'json' })
+          .done(function(res){
+            $deviceList.empty();
+            if(Array.isArray(res) && res.length){
+              $deviceList.append(renderDevices(res));
+            } else {
+              $deviceList.append('<div class="ps-loading">No devices found.</div>');
+            }
+          })
+          .fail(function(err){
+            $deviceList.html('<div class="ps-loading">Error loading devices</div>');
+            console.error(err);
+          });
+      });
+    
+      // ----- DEVICE CLICK (optional) -----
+      $('#ps-supported').on('click', '.ps-device', function(){
+        var name = $(this).text();
+        alert('Device clicked: ' + name);
+      });
+    
+      // ----- ADD NEW DEVICE BUTTON -----
+    //depreciated
+    
+    })(apex.jQuery);
+    
+      });
+    })(apex.jQuery);
+
+css: 
+  inline: |
+    /* Basic layout */
+    #ps-supported { max-width:1100px; margin: 2.5rem auto; color: #fff; font-family: Arial, sans-serif; }
+    .ps-categories { display:flex; gap:16px; flex-wrap:wrap; justify-content:center; margin-bottom:1.25rem; }
+    
+    /* Category box style */
+    .ps-category {
+      background: linear-gradient(135deg, #2b2b2b, #3b3b3b); /* subtle dark gradient */
+      border-radius: 12px;
+      padding: 12px;
+      width: 280px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+      cursor: pointer;
+      transition: transform .18s ease, box-shadow .18s ease;
+      position: relative;
+      overflow: visible;
+    }
+    
+    .ps-cat-label {
+      font-size: 1.05rem;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: #fff; /* text pops against dark gradient */
+      text-shadow: 0 1px 2px rgba(0,0,0,0.7); /* optional, extra contrast */
+    }
+    
+    .ps-category:hover { transform: translateY(-4px); box-shadow: 0 12px 30px rgba(0,0,0,0.45); }
+    
+    .ps-arrow { transform: rotate(0deg); transition: transform .25s ease; color: #ffb4e6; }
+    
+    /* the child container that will slideDown */
+    .ps-child {
+      display: none; /* initially hidden; will slideDown via JS */
+      margin-top: 12px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255,255,255,0.04);
+    }
+    
+    /* SoC / manufacturer / device items */
+    .ps-item {
+      background: rgba(255,255,255,0.02);
+      border-radius: 8px;
+      padding: 8px 10px;
+      margin: 8px 0;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      cursor:pointer;
+      transition: background .15s ease, transform .12s ease;
+    }
+    .ps-item:hover { background: rgba(255,255,255,0.04); transform: translateX(4px); }
+    .ps-item .label { font-weight:500; color:#fff; }
+    .ps-item .sub-arrow { color:#ffb4e6; }
+    
+    /* detail column on the right (manufacturers / devices) */
+    #ps-detail {
+      margin-top: 24px;
+      background: #1f1f1f;
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.35);
+    }
+    
+    /* manufacturer block */
+    .ps-manufacturer-block {
+      margin-top: 10px;
+      padding: 14px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.06); /* was 0.02 */
+    }
+    
+    .ps-manufacturer-title {
+      font-weight: 700;
+      color: #fff;
+      font-size: 1.05rem;
+    }
+    /* device list inside manufacturer */
+    .ps-device-list { margin-top:8px; }
+    .ps-device { padding:8px 10px; border-radius:6px; background: rgba(0,0,0,0.15); margin-bottom:6px; color:#fff; }
+    
+    /* small helper */
+    .ps-loading { opacity:0.8; font-style:italic; color:#ddd; }
+    
+    .ps-add-btn {
+      background: linear-gradient(90deg,#ff33cc,#9933ff);
+      color: #fff;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 10px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 8px 24px rgba(153,51,255,0.15);
+      transition: transform .18s ease, box-shadow .18s ease, opacity .12s;
+    }
+    .ps-add-btn:hover { transform: translateY(-3px); box-shadow: 0 14px 36px rgba(153,51,255,0.22); }
+    .ps-add-btn:active { transform: translateY(-1px); }
+    
+
+security: 
+  authentication: Page Requires Authentication
+  deep-linking: Application Default
+  page-access-protection: Arguments Must Have Checksum
+  form-auto-complete: Off
+  browser-cache: Application Default
+
+session-management: 
+  rejoin-sessions: Application Default
+
+advanced: 
+  enable-duplicate-page-submissions: Yes - Enable page to be re-posted
+  reload-on-submit: Only for Success
+
+server-cache: 
+  caching: Disabled
+
+regions: 
+- # ====== Region: New =========================================
+  id: 123190819658469027204
+  identification: 
+    name: New
+    type: Static Content
+
+  source: 
+    html-code: |
+      <div id="ps-supported">
+      
+        <!-- Categories (static buttons for now) -->
+        <div class="ps-categories">
+          <div class="ps-category" data-category="Qualcomm"> 
+            <div class="ps-cat-label">
+              Qualcomm <span class="ps-arrow">▸</span>
+            </div>
+            <div class="ps-child soc-list" data-loaded="false"></div>
+          </div>
+      
+          <div class="ps-category" data-category="Mediatek"> 
+            <div class="ps-cat-label">
+              Mediatek <span class="ps-arrow">▸</span>
+            </div>
+            <div class="ps-child soc-list" data-loaded="false"></div>
+          </div>
+      
+          <div class="ps-category" data-category="Exynos"> 
+            <div class="ps-cat-label">
+              Exynos <span class="ps-arrow">▸</span>
+            </div>
+            <div class="ps-child soc-list" data-loaded="false"></div>
+          </div>
+        </div>
+      
+        <!-- area for manufacturer list & devices -->
+        <div id="ps-detail" class="ps-detail"></div>
+      
+      </div>
+      
+
+  layout: 
+    sequence: 10
+    parent-region: No Parent
+    slot: BODY
+    start-new-layout: false
+    start-new-row: true
+    column: Automatic
+    new-column: true
+    column-span: Automatic
+
+  appearance: 
+    template: Standard
+    template-options: 
+    - '#DEFAULT#'
+    - t-Region--scrollBody
+    render-components: Above Content
+
+  accessibility: 
+    use-landmark: true
+    landmark-type: Template Default
+
+  advanced: 
+    region-display-selector: false
+    exclude-title-from-translation: false
+
+  customization: 
+    customizable: Not Customizable By End Users
+
+  attributes: 
+    settings: 
+      output-as: HTML
+      expand-shortcuts: false
+
+- # ====== Region: Breadcrumb ==================================
+  id: 123370752392847952092
+  identification: 
+    name: Breadcrumb
+    type: Breadcrumb
+
+  source: 
+    breadcrumb: Breadcrumb # 123189750976044967475
+
+  layout: 
+    sequence: 10
+    parent-region: No Parent
+    slot: REGION_POSITION_01
+    start-new-layout: false
+    start-new-row: true
+    column: Automatic
+    new-column: true
+    column-span: Automatic
+
+  appearance: 
+    template: Title Bar
+    template-options: 
+    - '#DEFAULT#'
+    - t-BreadcrumbRegion--useBreadcrumbTitle
+    render-components: Above Content
+
+  accessibility: 
+    use-landmark: true
+    landmark-type: Template Default
+
+  advanced: 
+    region-display-selector: false
+    exclude-title-from-translation: false
+
+  customization: 
+    customizable: Not Customizable By End Users
+
+  attributes: 
+    appearance: 
+      breadcrumb-template: Breadcrumb
+      template-options: 
+      - '#DEFAULT#'
+
+buttons: 
+- # ====== Button: ADD_MANUFACTURER ============================
+  id: 123190822558179027233
+  identification: 
+    button-name: ADD_MANUFACTURER
+    label: Add Manufacturer
+
+  layout: 
+    sequence: 10
+    region: New # 123190819658469027204
+    slot: EDIT
+    start-new-layout: false
+    start-new-row: true
+    column: Automatic
+    new-column: true
+    column-span: Automatic
+
+  appearance: 
+    button-template: Text
+    hot: true
+    template-options: 
+    - '#DEFAULT#'
+
+  behavior: 
+    action: Redirect to Page in this Application
+    target: 
+      url: 'f?p=&APP_ID.:7:&SESSION.::&DEBUG.:7::'
+      page: 7 # Add Manufacturer
+      clear-cache: 7
+
+    warn-on-unsaved-changes: Do Not Check
+
+- # ====== Button: ADD_SOC =====================================
+  id: 123190822600388027234
+  identification: 
+    button-name: ADD_SOC
+    label: Add Soc
+
+  layout: 
+    sequence: 20
+    region: New # 123190819658469027204
+    slot: EDIT
+    start-new-layout: false
+    start-new-row: true
+    column: Automatic
+    new-column: true
+    column-span: Automatic
+
+  appearance: 
+    button-template: Text
+    hot: true
+    template-options: 
+    - '#DEFAULT#'
+
+  behavior: 
+    action: Redirect to Page in this Application
+    target: 
+      url: 'f?p=&APP_ID.:3:&SESSION.::&DEBUG.:3::'
+      page: 3 # Add SoC
+      clear-cache: 3
+
+    warn-on-unsaved-changes: Do Not Check
+
+- # ====== Button: ADD_DEVICE ==================================
+  id: 123190822757184027235
+  identification: 
+    button-name: ADD_DEVICE
+    label: Add Device
+
+  layout: 
+    sequence: 30
+    region: New # 123190819658469027204
+    slot: EDIT
+    start-new-layout: false
+    start-new-row: true
+    column: Automatic
+    new-column: true
+    column-span: Automatic
+
+  appearance: 
+    button-template: Text
+    hot: true
+    template-options: 
+    - '#DEFAULT#'
+
+  behavior: 
+    action: Redirect to Page in this Application
+    target: 
+      url: 'f?p=&APP_ID.:5:&SESSION.::&DEBUG.:5::'
+      page: 5 # Add Device
+      clear-cache: 5
+
+    warn-on-unsaved-changes: Do Not Check
+
+processes: 
+- # ====== Process: GET_SOCs ===================================
+  id: 123190819842362027206
+  identification: 
+    name: GET_SOCs
+    type: Execute Code
+    execution-chain: None
+
+  source: 
+    location: Local Database
+    language: PL/SQL
+    pl/sql-code: |
+      declare
+        l_cat_name varchar2(4000) := apex_application.g_x01; -- we pass category name as x01
+      begin
+        apex_json.open_array;
+        for r in (
+          select soc_id, soc_name
+          from socs
+          where category_id = (
+            select category_id from categories where lower(category_name) = lower(nvl(l_cat_name,'@#@'))
+          )
+          order by soc_name
+        ) loop
+          apex_json.open_object;
+          apex_json.write('id', r.soc_id);
+          apex_json.write('name', r.soc_name);
+          apex_json.close_object;
+        end loop;
+        apex_json.close_array;
+      exception when others then
+        -- return empty array on error
+        apex_json.open_array;
+        apex_json.close_array;
+      end;
+      
+
+  execution: 
+    sequence: 10
+    point: Ajax Callback
+    run-process: Once Per Page Visit (default)
+
+- # ====== Process: GET_MANUFACTURERS ==========================
+  id: 123190819980416027207
+  identification: 
+    name: GET_MANUFACTURERS
+    type: Execute Code
+    execution-chain: None
+
+  source: 
+    location: Local Database
+    language: PL/SQL
+    pl/sql-code: |
+      declare
+        l_soc_id number := to_number(nvl(apex_application.g_x01,'0'));
+      begin
+        apex_json.open_array;
+        for r in (
+          select distinct m.manufacturer_id, m.manufacturer_name
+          from manufacturers m
+          left join devices d
+            on d.manufacturer_id = m.manufacturer_id
+            and d.soc_id = l_soc_id
+          where m.soc_id = l_soc_id
+             or d.manufacturer_id is not null
+          order by m.manufacturer_name
+        ) loop
+          apex_json.open_object;
+          apex_json.write('id', r.manufacturer_id);
+          apex_json.write('name', r.manufacturer_name);
+          apex_json.close_object;
+        end loop;
+        apex_json.close_array;
+      end;
+
+  execution: 
+    sequence: 10
+    point: Ajax Callback
+    run-process: Once Per Page Visit (default)
+
+- # ====== Process: GET_DEVICES ================================
+  id: 123190820091545027208
+  identification: 
+    name: GET_DEVICES
+    type: Execute Code
+    execution-chain: None
+
+  source: 
+    location: Local Database
+    language: PL/SQL
+    pl/sql-code: |
+      declare
+        l_soc_id number := to_number(nvl(apex_application.g_x01,'0'));
+        l_man_id number := to_number(nvl(apex_application.g_x02,'0'));
+      begin
+        apex_json.open_array;
+        for r in (
+          select device_id, device_name, nvl(other_info,'') other_info
+          from devices
+          where soc_id = l_soc_id
+            and manufacturer_id = l_man_id
+          order by device_name
+        ) loop
+          apex_json.open_object;
+          apex_json.write('id', r.device_id);
+          apex_json.write('name', r.device_name);
+          apex_json.write('other_info', r.other_info);
+          apex_json.close_object;
+        end loop;
+        apex_json.close_array;
+      exception when others then
+        apex_json.open_array;
+        apex_json.close_array;
+      end;
+      
+
+  execution: 
+    sequence: 10
+    point: Ajax Callback
+    run-process: Once Per Page Visit (default)
+
+- # ====== Process: GET_DIALOG_URL =============================
+  id: 123190820965087027217
+  identification: 
+    name: GET_DIALOG_URL
+    type: Execute Code
+    execution-chain: None
+
+  source: 
+    location: Local Database
+    language: PL/SQL
+    pl/sql-code: |
+      declare
+        l_url varchar2(4000);
+      begin
+        l_url := 'f?p=' || v('APP_ID') || ':5:' || v('APP_SESSION') || '::NO::P_DIALOG_MODE:ADD';
+        apex_json.open_object;
+        apex_json.write('url', apex_util.prepare_url(p_url => l_url, p_checksum_type => 'SESSION'));
+        apex_json.close_object;
+      end;
+      
+
+  execution: 
+    sequence: 10
+    point: Ajax Callback
+    run-process: Once Per Page Visit (default)
+
+- # ====== Process: GET_DIALOG_SOC_URL =========================
+  id: 123190821232214027220
+  identification: 
+    name: GET_DIALOG_SOC_URL
+    type: Execute Code
+    execution-chain: None
+
+  source: 
+    location: Local Database
+    language: PL/SQL
+    pl/sql-code: |
+      declare
+        l_url varchar2(4000);
+      begin
+        l_url := 'f?p=' || v('APP_ID') || ':3:' || v('APP_SESSION') || '::NO::P_DIALOG_MODE:ADD';
+        apex_json.open_object;
+        apex_json.write('url', apex_util.prepare_url(p_url => l_url, p_checksum_type => 'SESSION'));
+        apex_json.close_object;
+      end;
+
+  execution: 
+    sequence: 20
+    point: Ajax Callback
+    run-process: Once Per Page Visit (default)
+
+- # ====== Process: GET_DIALOG_MAN_URL =========================
+  id: 123190822430396027232
+  identification: 
+    name: GET_DIALOG_MAN_URL
+    type: Execute Code
+    execution-chain: None
+
+  source: 
+    location: Local Database
+    language: PL/SQL
+    pl/sql-code: |
+      declare
+        l_url varchar2(4000);
+      begin
+        l_url := 'f?p=' || v('APP_ID') || ':' || '7' || ':' || v('APP_SESSION') || '::NO::P_DIALOG_MODE:ADD';
+        apex_json.open_object;
+        apex_json.write('url', apex_util.prepare_url(p_url => l_url, p_checksum_type => 'SESSION'));
+        apex_json.close_object;
+      end;
+      
+
+  execution: 
+    sequence: 30
+    point: Ajax Callback
+    run-process: Once Per Page Visit (default)
+

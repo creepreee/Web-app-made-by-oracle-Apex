@@ -1,0 +1,61 @@
+---
+- # ====== List of Values: SOCS.SOC_NAME =======================
+  id: 123384581776145730596
+  identification: 
+    name: SOCS.SOC_NAME
+
+  subscription: 
+    version-number: 15687673558842
+
+  source: 
+    location: Local Database
+    type: Table / View
+    table-owner: Parsing Schema
+    table-name: SOCS
+
+  column-mapping: 
+    return: SOC_ID
+    display: SOC_NAME
+    default-sort: SOC_NAME
+    sort-direction: Ascending (Nulls Last)
+
+- # ====== List of Values: MANUFACTURERS.MANUFACTURER_NAME =====
+  id: 123384582407152730597
+  identification: 
+    name: MANUFACTURERS.MANUFACTURER_NAME
+
+  subscription: 
+    version-number: 15687673558870
+
+  source: 
+    location: Local Database
+    type: Table / View
+    table-owner: Parsing Schema
+    table-name: MANUFACTURERS
+
+  column-mapping: 
+    return: MANUFACTURER_ID
+    display: MANUFACTURER_NAME
+    default-sort: MANUFACTURER_NAME
+    sort-direction: Ascending (Nulls Last)
+
+- # ====== List of Values: CATEGORIES.CATEGORY_NAME ============
+  id: 123419567730708753003
+  identification: 
+    name: CATEGORIES.CATEGORY_NAME
+
+  subscription: 
+    version-number: 15687732653360
+
+  source: 
+    location: Local Database
+    type: Table / View
+    table-owner: Parsing Schema
+    table-name: CATEGORIES
+
+  column-mapping: 
+    return: CATEGORY_ID
+    display: CATEGORY_NAME
+    default-sort: CATEGORY_NAME
+    sort-direction: Ascending (Nulls Last)
+

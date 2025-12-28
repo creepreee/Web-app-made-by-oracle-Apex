@@ -1,0 +1,82 @@
+---
+- # ====== Static Application File: icons/app-icon-32.png ======
+  id: 123189753737628967482
+  identification: 
+    file-name: icons/app-icon-32.png
+
+  attributes: 
+    mime-type: image/png
+    file-character-set: Unicode UTF-8
+
+- # ====== Static Application File: icons/app-icon-144-rounded.p
+  id: 123189754018477967483
+  identification: 
+    file-name: icons/app-icon-144-rounded.png
+
+  attributes: 
+    mime-type: image/png
+    file-character-set: Unicode UTF-8
+
+- # ====== Static Application File: icons/app-icon-192.png =====
+  id: 123189754320148967483
+  identification: 
+    file-name: icons/app-icon-192.png
+
+  attributes: 
+    mime-type: image/png
+    file-character-set: Unicode UTF-8
+
+- # ====== Static Application File: icons/app-icon-512.png =====
+  id: 123189754636450967484
+  identification: 
+    file-name: icons/app-icon-512.png
+
+  attributes: 
+    mime-type: image/png
+    file-character-set: Unicode UTF-8
+
+- # ====== Static Application File: icons/app-icon-256-rounded.p
+  id: 123189754978305967484
+  identification: 
+    file-name: icons/app-icon-256-rounded.png
+
+  attributes: 
+    mime-type: image/png
+    file-character-set: Unicode UTF-8
+
+- # ====== Static Application File: silicium.png ===============
+  id: 123341133439466848822
+  identification: 
+    file-name: silicium.png
+
+  attributes: 
+    mime-type: image/png
+    file-character-set: Unicode UTF-8
+
+- # ====== Static Application File: windows.png ================
+  id: 123352864003082227412
+  identification: 
+    file-name: windows.png
+
+  attributes: 
+    mime-type: image/png
+    file-character-set: Unicode UTF-8
+
+- # ====== Static Application File: UEFI.png ===================
+  id: 123355359591015662563
+  identification: 
+    file-name: UEFI.png
+
+  attributes: 
+    mime-type: image/png
+    file-character-set: Unicode UTF-8
+
+- # ====== Static Application File: phones2.jpg ================
+  id: 123361652054895655677
+  identification: 
+    file-name: phones2.jpg
+
+  attributes: 
+    mime-type: image/jpeg
+    file-character-set: Unicode UTF-8
+

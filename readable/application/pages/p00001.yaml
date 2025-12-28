@@ -1,0 +1,304 @@
+---
+# ====== Page: Project Silicium -UEFI on ARM Devices =========
+id: 1
+identification: 
+  name: Project Silicium -UEFI on ARM Devices
+  alias: HOME
+  title: Project Silicium -UEFI on ARM Devices
+
+appearance: 
+  page-mode: Normal
+  page-template: my template
+  template-options: 
+  - '#DEFAULT#'
+
+navigation-menu: 
+  override-user-interface-level: false
+
+navigation: 
+  cursor-focus: Do not focus cursor
+  warn-on-unsaved-changes: true
+
+css: 
+  inline: |
+    body {
+        background-color: #14161A; /* dark background */
+        position: relative; /* required for pseudo-element */
+    }
+    
+    body::before {
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        
+        background: url(#APP_IMAGES#silicium.png) no-repeat top center;
+        background-size: cover; /* zoom to fill screen */
+        
+        opacity: 0.4; /* 40% faded */
+        z-index: -1; /* behind content */
+    }
+    
+    .custom-paragraph {
+        font-size: 1.25rem; /* similar to text-xl */
+        color: #cccccc;      /* muted text color */
+        margin-bottom: 2rem; /* mb-8 */
+        line-height: 1.7;    /* relaxed spacing */
+    }
+    
+    .custom-highlight {
+        text-decoration: underline dotted;
+        text-decoration-color: rgba(255, 0, 128, 0.5); /* dotted purple-ish */
+        cursor: help;
+        transition: text-decoration-color 0.3s;
+    }
+    
+    .custom-highlight:hover {
+        text-decoration-color: #ff33cc; /* brighter on hover */
+    }
+    
+    .github-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 32px;
+        height: 44px;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: #ffffff;
+        background-color: #24292f; /* GitHub dark gray */
+        border: 1px solid #6a00da;
+        border-radius: 8px;
+        text-decoration: none;
+        transition: all 0.3s ease;
+    }
+    
+    .github-btn:hover {
+        background-color: #333;
+        box-shadow: 0 0 15px rgba(0,0,0,0.3);
+    }
+    
+    .github-btn svg {
+        width: 20px;
+        height: 20px;
+        stroke: currentColor;
+    }
+    
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 2rem;
+        max-width: 700px;
+        margin: 0 auto;
+        text-align: center;
+    }
+    
+    @media (min-width: 768px) {
+        .stats-grid {
+            grid-template-columns: repeat(4, 1fr);
+        }
+    }
+    
+    .stat-item .stat-number {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #ff33cc; /* pink/purple color */
+        margin-bottom: 0.25rem;
+    }
+    
+    .stat-item .stat-label {
+        font-size: 0.875rem;
+        color: #999999; /* muted text */
+    }
+    
+
+security: 
+  authentication: Page Requires Authentication
+  deep-linking: Application Default
+  page-access-protection: Arguments Must Have Checksum
+  form-auto-complete: Off
+  browser-cache: Application Default
+
+session-management: 
+  rejoin-sessions: Application Default
+
+advanced: 
+  enable-duplicate-page-submissions: Yes - Enable page to be re-posted
+  reload-on-submit: Only for Success
+
+server-cache: 
+  caching: Disabled
+
+regions: 
+- # ====== Region: About =======================================
+  id: 123190819539023027203
+  identification: 
+    name: About
+    type: Static Content
+
+  source: 
+    html-code: |
+      <div style="text-align:center; margin-top:50px;">
+          <h1 style="font-size:4em; font-weight:bold;">
+              <span style="color:white;">Project</span> 
+              <span style="color:#00008B;">Silicium</span>
+          </h1>
+      
+      
+          <p class="custom-paragraph">
+          Building 
+          <span class="custom-highlight" title="UEFI firmware info">UEFI firmware</span> 
+          for 
+          <span class="custom-highlight" title="ARM-based info">ARM-based</span> 
+          mobile devices
+      </p>
+      
+      <p class="custom-paragraph">
+          Running 
+          <span class="custom-highlight" title="Windows 10/11 ARM info">Windows 10/11 ARM</span> 
+          and Linux on smartphones and tablets with desktop-class performance
+      </p>
+      </div>
+      
+      <div style="display:flex; justify-content:center; gap:16px; margin-top:40px; flex-wrap:wrap;">
+      
+          <!-- View on GitHub Button -->
+          <a href="https://github.com/Project-Silicium" target="_blank" class="github-btn">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:8px; vertical-align:middle;">
+                  <path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"></path>
+                  <path d="M9 18c-4.51 2-5-2-7-2"></path>
+              </svg>
+              View on GitHub
+          </a>
+      </div>
+      
+      <!-- To Do: support dynamic update of classes stat-number ids "github-stars" and "forks" via API. -->
+      <!-- To Do: support dynamic update of class stat-number id "supported-devices" via PL/SQL dynamic query to count total rows in devices table from DB and output here. -->
+      
+      <div class="stats-grid" style="margin-top:50px;">
+          <div class="stat-item">
+              <div class="stat-number" id="supported-devices">40+</div>
+              <div class="stat-label">Supported Devices</div>
+          </div>
+          <div class="stat-item">
+              <div class="stat-number" id="github-stars">239</div>
+              <div class="stat-label">GitHub Stars</div>
+          </div>
+          <div class="stat-item">
+              <div class="stat-number" id="forks">103</div>
+              <div class="stat-label">Forks</div>
+          </div>
+          <div class="stat-item">
+              <div class="stat-number" id="contributors">50+</div>
+              <div class="stat-label">Contributors</div>
+          </div>
+      </div>
+      
+      <!-- - next section -->
+      
+      <section class="windows-arm-section" style="padding: 6rem 0; margin-top:50px; background-color: #15181C;">
+        <div class="windows-arm-container" style="max-width: 1200px; margin: 0 auto; padding: 0 1.5rem; display: flex; flex-direction: row; align-items: center; gap: 3rem; flex-wrap: wrap;">
+          
+          <!-- Image -->
+          <div class="windows-arm-image" style="flex: 1 1 400px; max-width: 600px;">
+            <img src="#APP_IMAGES#windows.png" alt="Windows on ARM" style="width: 100%; height: 400px; object-fit: contain; border-radius: 0.5rem; box-shadow: 0 10px 20px rgba(0,0,0,0.2); transition: box-shadow 0.3s;">
+          </div>
+      
+          <!-- Text content -->
+          <div class="windows-arm-text" style="flex: 1 1 400px; max-width: 600px; text-align: left;">
+            <h2 style="font-size: 2rem; font-weight: bold; margin-bottom: 1.5rem;">
+              <span style="background: linear-gradient(90deg, #ff33cc, #9933ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+              Windows
+              </span> 
+              <span style="color: white;"> On ARM
+                  </span>
+              </h2>
+      
+            <p style="font-size: 1.125rem; color: #999999; line-height: 1.75; margin-bottom: 2rem;">
+              Boot Windows and Linux directly on <span style="text-decoration: underline dotted; cursor: help;">ARM</span> phones and tablets with our community-driven <span style="text-decoration: underline dotted; cursor: help;">UEFI</span> builds and give it a whole new life. Experience desktop-class performance on your mobile device.
+            </p>
+          </div>
+        </div>
+      </section>
+      
+      
+      <section style="padding: 6rem 0; background-color: #15181C;">
+        <div style="max-width: 1200px; margin: 0 auto; padding: 0 1.5rem; display: flex; flex-direction: row; align-items: center; gap: 3rem; flex-wrap: wrap;">
+      
+          <!-- Image first -->
+          <div style="flex: 1; max-width: 600px;">
+            <img src="#APP_IMAGES#UEFI.png" alt="UEFI Experience" style="width: 100%; height: 400px; object-fit: contain; border-radius: 0.5rem; box-shadow: 0 10px 20px rgba(0,0,0,0.2); transition: box-shadow 0.3s;">
+          </div>
+      
+          <!-- Text content -->
+          <div style="flex: 1; max-width: 600px; text-align: left;">
+            <h2 style="font-size: 2rem; font-weight: bold; margin-bottom: 1.5rem;">
+              <span style="color: white;">True </span>
+              <span style="background: linear-gradient(90deg, #ff33cc, #9933ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+                  UEFI Experience
+              </span>
+              <span style="color: white;"> for Mobile Devices</span>
+            </h2>
+            <p style="font-size: 1.125rem; color: #999999; line-height: 1.75; margin-bottom: 2rem;">
+              Project Silicium is an open-source initiative that brings desktop-grade 
+              <span style="text-decoration: underline dotted; cursor: help;">UEFI</span> 
+              to smartphones and tablets — unlocking support for Windows, Linux, and beyond with 
+              <span style="text-decoration: underline dotted; cursor: help;">enterprise-level security</span>.
+            </p>
+          </div>
+      
+        </div>
+      </section>
+      
+      
+      
+      <section style="padding: 6rem 0; background-color: #15181C;">
+        <div style="max-width: 1200px; margin: 0 auto; padding: 0 1.5rem; display: flex; flex-direction: row; align-items: center; gap: 3rem; flex-wrap: wrap;">
+      
+          <!-- Image on the left -->
+          <div style="flex: 1; max-width: 600px;">
+            <img src="#APP_IMAGES#phones2.jpg" alt="Supported Devices" style="width: 100%; height: 400px; object-fit: contain; border-radius: 0.5rem; box-shadow: 0 10px 20px rgba(0,0,0,0.2); transition: box-shadow 0.3s;">
+          </div>
+      
+          <!-- Text content -->
+          <div style="flex: 1; max-width: 600px; color: white;">
+            <h2 style="font-size: 2rem; font-weight: bold; margin-bottom: 1.5rem;">
+              Is Your <span style="background: linear-gradient(90deg, #ff33cc, #9933ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Device Supported?</span>
+            </h2>
+            <p style="font-size: 1.125rem; line-height: 1.75; margin-bottom: 2rem;">
+              Curious whether your phone or tablet works with our 
+              <span style="text-decoration: underline dotted; cursor: help;">UEFI</span> builds? 
+              Check our comprehensive device database for up-to-date compatibility info and status of your device.
+            </p>
+          </div>
+        </div>
+      </section>
+
+  layout: 
+    sequence: 10
+    parent-region: No Parent
+    slot: BODY
+    start-new-layout: false
+    start-new-row: true
+    column: Automatic
+    new-column: true
+    column-span: Automatic
+
+  appearance: 
+    template: None
+    render-components: Above Content
+
+  advanced: 
+    exclude-title-from-translation: false
+
+  customization: 
+    customizable: Not Customizable By End Users
+
+  attributes: 
+    settings: 
+      output-as: HTML
+      expand-shortcuts: false
+
