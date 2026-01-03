@@ -1,0 +1,1906 @@
+---
+# ====== Page: Device Details Editor =========================
+id: 4
+identification: 
+  name: Device Details Editor
+  alias: DEVICE-DETAILS-EDITOR
+  title: Device Details Editor
+
+appearance: 
+  page-mode: Modal Dialog
+  dialog-template: Theme Default
+  template-options: 
+  - '#DEFAULT#'
+
+dialog: 
+  chained: true
+  resizable: true
+
+navigation-menu: 
+  override-user-interface-level: false
+
+navigation: 
+  cursor-focus: Do not focus cursor
+  warn-on-unsaved-changes: true
+
+javascript: 
+  function-and-global-variable-declaration: |
+    function saveUefiFromIG() {
+    
+      var ig = apex.region("ig_uefi");
+      if (!ig) {
+        alert("UEFI grid not ready");
+        return;
+      }
+    
+      var grid  = ig.widget().interactiveGrid("getViews", "grid");
+      var model = grid.model;
+    
+      var payload = {
+        device_id: $v("P939_DEVICE_ID"),   // <-- MUST exist
+        uefi: []
+      };
+    
+      model.forEach(function(rec){
+    
+        var state =
+          model.getValue(rec, "CHK_WORKING") === 'Y'     ? 'WORKING' :
+          model.getValue(rec, "CHK_NOTWORKING") === 'Y'  ? 'NOT_WORKING' :
+          model.getValue(rec, "CHK_UNKNOWN") === 'Y'     ? 'UNKNOWN' :
+          'UNTESTED';
+    
+        payload.uefi.push({
+          feature_id:   model.getValue(rec, "FEATURE_ID"),
+          feature_name: model.getValue(rec, "FEATURE_NAME"),
+          description:  model.getValue(rec, "DESCRIPTION"),
+          state:        state
+        });
+      });
+    
+      console.log("SENDING PAYLOAD:", payload);
+    
+      apex.server.process(
+        "SAVE_DEVICE_UEFI",
+        {
+          x01: payload.device_id,
+          x02: JSON.stringify(payload)
+        },
+        {
+          dataType: "json",
+          success: function(res){
+            console.log("SERVER RESPONSE:", res);
+            apex.message.showPageSuccess("UEFI data saved");
+          },
+          error: function(err){
+            console.error("SAVE FAILED", err);
+            alert("Save failed — check console");
+          }
+        }
+      );
+    }
+    
+  execute-when-page-loads: |
+    (function($){
+      "use strict";
+    
+      // ---- Helpers to read device id robustly (dialog or main page) ----
+      function getDeviceIdAny() {
+        try { if (typeof $v === 'function' && $v('P4_DEVICE_ID')) return String($v('P4_DEVICE_ID')); } catch(e){}
+        try { if (window.apex && typeof window.apex.item === 'function') { var it = apex.item('P4_DEVICE_ID'); if(it && typeof it.getValue === 'function') return String(it.getValue()); } } catch(e){}
+        // try parent / top / opener (same origin)
+        var tries = [window.parent, window.top, window.opener];
+        for(var i=0;i<tries.length;i++){
+          try {
+            var w = tries[i];
+            if(!w || w===window) continue;
+            if (typeof w.$v === 'function' && w.$v('P4_DEVICE_ID')) return String(w.$v('P4_DEVICE_ID'));
+            if (w.apex && typeof w.apex.item === 'function') { var it2 = w.apex.item('P4_DEVICE_ID'); if(it2 && typeof it2.getValue === 'function') return String(it2.getValue()); }
+            if (w.document) {
+              var el = w.document.querySelector('#P4_DEVICE_ID') || w.document.querySelector('[name="P4_DEVICE_ID"]');
+              if (el && (el.value || el.getAttribute && el.getAttribute('value'))) return String(el.value || el.getAttribute('value'));
+            }
+          } catch(e){ /* ignore cross origin */ }
+        }
+        return '';
+      }
+    
+      // ---- robust extractor for weird LOV / object values ----
+      function extractStateRaw(val){
+        if (val === null || val === undefined) return '';
+        if (typeof val === 'string') return val;
+        if (typeof val === 'number' || typeof val === 'boolean') return String(val);
+        if (Array.isArray(val)) return val.map(v => (v==null)?'':String(v)).join(',');
+        if (typeof val === 'object') {
+          // common APEX LOV shapes: try some keys
+          var keys = ['R','D','r','d','value','label','name','state','code','display'];
+          for (var k=0;k<keys.length;k++){
+            if (val[keys[k]] !== undefined && val[keys[k]] !== null) return String(val[keys[k]]);
+          }
+          // fallback to JSON
+          try { return JSON.stringify(val); } catch(e){ return String(val); }
+        }
+        return String(val);
+      }
+    
+      // ---- normalize to canonical DB values (max 10 chars) ----
+    
+    function normalizeStateValue(raw){
+      var s = (raw||'').toString().trim();
+      if (!s) return 'UNTESTED';
+      var up = s.toUpperCase().replace(/[\s\-]+/g,'_');
+    
+      // exact lists (preferred canonical outputs)
+      var notworkExact = ['NOT_WORK','NOT_WORKING','NOTWORK','FAIL','FALSE','NO','BROKEN','0'];
+      var workingExact = ['WORKING','OK','TRUE','PASS','YES','Y','1','ACTIVE'];
+      var unknownExact = ['UNKNOWN','N/A','NA','?','NONE'];
+      var warnExact    = ['WARN','WARNING','WIP','PARTIAL','LIMITED','DEGRADED'];
+    
+      // 1) explicit NOT/FAIL first
+      for(var i=0;i<notworkExact.length;i++){
+        if(up === notworkExact[i]) return 'NOT_WORKING';
+      }
+    
+      // 2) explicit WORK
+      for(var j=0;j<workingExact.length;j++){
+        if(up === workingExact[j]) return 'WORKING';
+      }
+    
+      // 3) exact unknown/warn
+      for(var k=0;k<unknownExact.length;k++){
+        if(up === unknownExact[k]) return 'UNKNOWN';
+      }
+      for(var m=0;m<warnExact.length;m++){
+        if(up === warnExact[m]) return 'UNKNOWN';
+      }
+    
+      // 4) fuzzy contains - check NOT/FAIL before WORK
+      if (up.indexOf('NOT') >= 0 || up.indexOf('FAIL') >= 0 || up.indexOf('FALSE') >= 0 || up.indexOf('NO') >= 0) return 'NOT_WORKING';
+      if (up.indexOf('WORK') >= 0 || up.indexOf('OK') >= 0 || up.indexOf('YES') >= 0) return 'WORKING';
+      if (up.indexOf('?') >= 0 || up.indexOf('UNKNOWN') >= 0) return 'UNKNOWN';
+    
+      // fallback
+      return 'UNKNOWN';
+    }
+    
+      // ---- read IG model rows robustly ----
+      function readIGModelRows(staticId) {
+        try {
+          if (typeof apex === 'undefined' || typeof apex.region !== 'function') return null;
+          var rg = apex.region(staticId);
+          if (!rg) return null;
+          var widget = rg.widget();
+          if (!widget) return null;
+          var view, model;
+          try { view = widget.interactiveGrid('getCurrentView'); } catch(e) { try { view = widget.interactiveGrid('getViews','grid'); } catch(e) { view = null; } }
+          model = view && (view.model || (view.view && view.view.model));
+          if (!model) return null;
+    
+          var rows = [];
+          // prefer model.forEach
+          if (typeof model.forEach === 'function') {
+            model.forEach(function(rec){
+              try {
+                rows.push({
+                  FEATURE_ID: model.getValue(rec,'FEATURE_ID'),
+                  FEATURE_NAME: model.getValue(rec,'FEATURE_NAME'),
+                  DESCRIPTION: model.getValue(rec,'DESCRIPTION'),
+                  STATE_CODE: model.getValue(rec,'STATE_CODE')  // whatever the IG column is called
+                });
+              } catch(e){}
+            });
+            return rows;
+          }
+          // fallback getRecordIds
+          if (typeof model.getRecordIds === 'function') {
+            var ids = model.getRecordIds();
+            ids.forEach(function(id){
+              try {
+                var rec = model.getRecord(id);
+                rows.push({
+                  FEATURE_ID: model.getValue(rec,'FEATURE_ID'),
+                  FEATURE_NAME: model.getValue(rec,'FEATURE_NAME'),
+                  DESCRIPTION: model.getValue(rec,'DESCRIPTION'),
+                  STATE_CODE: model.getValue(rec,'STATE_CODE')
+                });
+              } catch(e){}
+            });
+            return rows;
+          }
+        } catch(e){
+          console.warn('readIGModelRows error', e);
+        }
+        return null;
+      }
+    
+      // ---- DOM fallback for IG table (if model fails) ----
+      function readIGDomRows() {
+        var rows = [];
+        var $table = $('#ig_uefi_ig table').first();
+        if (!$table || $table.length === 0) $table = $('.a-IG table').first();
+        if (!$table || $table.length === 0) return rows;
+    
+        $table.find('tbody tr').each(function(){
+          var $tr = $(this);
+          var fid = $tr.find('[data-col="FEATURE_ID"]').text().trim() || $tr.find('input[name$="FEATURE_ID"]').val() || null;
+          var fname = $tr.find('[data-col="FEATURE_NAME"]').text().trim() || $tr.find('input[name$="FEATURE_NAME"]').val() || '';
+          var desc = $tr.find('[data-col="DESCRIPTION"]').text().trim() || $tr.find('textarea[name$="DESCRIPTION"]').val() || '';
+          var stateCell = $tr.find('[data-col="STATE_CODE"]').text().trim() || '';
+          rows.push({
+            FEATURE_ID: fid || null,
+            FEATURE_NAME: fname || '',
+            DESCRIPTION: desc || '',
+            STATE_CODE: stateCell || ''
+          });
+        });
+        return rows;
+      }
+    
+      // ---- build normalized payload for server ----
+      function buildPayload(rows, deviceId) {
+        var out = [];
+        (rows||[]).forEach(function(r, idx){
+          var raw = extractStateRaw(r.STATE_CODE || r.state || r.state_code || null);
+          var norm = normalizeStateValue(raw);
+          console.debug('Row', idx, 'feature=', r.FEATURE_NAME || r.feature_name, 'raw=', raw, 'norm=', norm);
+          out.push({
+            feature_id: (r.FEATURE_ID === null || r.FEATURE_ID === undefined || r.FEATURE_ID === '') ? null : r.FEATURE_ID,
+            feature_name: r.FEATURE_NAME || r.feature_name || '',
+            description: r.DESCRIPTION || r.description || '',
+            state: norm
+          });
+        });
+        return { device_id: String(deviceId || ''), uefi: out };
+      }
+    
+      // ---- main save function ----
+      function saveUefiFromIG() {
+        try {
+          var deviceId = getDeviceIdAny();
+          console.log('Resolved device id ->', deviceId);
+          if (!deviceId) console.warn('device id empty — will still send empty x01');
+    
+          // 1) try model
+          var rows = readIGModelRows('ig_uefi');
+          if (!rows || !rows.length) {
+            console.warn('Model read returned empty — trying DOM fallback');
+            rows = readIGDomRows();
+          }
+    
+          console.log('Collected rows count =', (rows && rows.length) || 0);
+          if (!rows || !rows.length) {
+            console.warn('No rows found to save. Aborting.');
+            return;
+          }
+    
+          var payload = buildPayload(rows, deviceId);
+          console.log('SENDING PAYLOAD:', payload);
+    
+          apex.server.process(
+            'SAVE_DEVICE_UEFI',
+            { x01: String(deviceId || ''), x02: JSON.stringify(payload) },
+            {
+              dataType: 'json',
+              success: function(res){
+                console.log('SERVER RESPONSE:', res);
+                if (res && res.ok) {
+                  apex.message.showPageSuccess('Saved UEFI data');
+                  // try refreshing IG in parent/opener/top/local
+                  try { if (window.parent && window.parent !== window && window.parent.apex && typeof window.parent.apex.region === 'function') window.parent.apex.region('ig_uefi').refresh(); } catch(e){}
+                  try { if (window.opener && window.opener.apex && typeof window.opener.apex.region === 'function') window.opener.apex.region('ig_uefi').refresh(); } catch(e){}
+                  try { apex.region && apex.region('ig_uefi') && apex.region('ig_uefi').refresh(); } catch(e){}
+                } else {
+                  apex.message.clearErrors();
+                  apex.message.showErrors([{ type:'error', location:'page', message:(res && res.error) || 'Save failed', unsafe:false }]);
+                }
+              },
+              error: function(jqXHR, textStatus, err){
+                console.error('AJAX error', textStatus, err, jqXHR && jqXHR.responseText);
+                apex.message.showErrors([{ type:'error', location:'page', message:'AJAX error while saving UEFI data', unsafe:false }]);
+              }
+            }
+          );
+        } catch(e) {
+          console.error('saveUefiFromIG fatal', e);
+          apex.message.showErrors([{ type:'error', location:'page', message:'Unexpected JS error — check console', unsafe:false }]);
+        }
+      }
+    
+      // expose so you can call from console
+      window.saveUefiFromIG = saveUefiFromIG;
+      // bind UI Save button if present
+      $(document).on('click','#SAVE_DEVICE', function(e){ e.preventDefault(); saveUefiFromIG(); });
+    
+      console.log('Robust UEFI save helper installed — call saveUefiFromIG() to test.');
+    })(apex.jQuery);
+    
+
+security: 
+  authentication: Page Requires Authentication
+  deep-linking: Application Default
+  page-access-protection: Arguments Must Have Checksum
+  form-auto-complete: Off
+  browser-cache: Application Default
+
+session-management: 
+  rejoin-sessions: Application Default
+
+advanced: 
+  enable-duplicate-page-submissions: Yes - Enable page to be re-posted
+  reload-on-submit: Only for Success
+
+server-cache: 
+  caching: Disabled
+
+regions: 
+- # ====== Region: New =========================================
+  id: 123190823991659027247
+  identification: 
+    name: New
+    type: Interactive Grid
+
+  source: 
+    location: Local Database
+    type: SQL Query
+    sql-query: |
+      SELECT 
+        m.feature_id,
+        m.feature_name,
+        NVL(d.description, NULL) AS description,
+        NVL(d.state_code, 'UNTESTED') AS state_code
+      FROM uefi_master_list m
+      LEFT JOIN device_uefi_status d
+        ON d.feature_name = m.feature_name
+       AND d.device_id = :P4_DEVICE_ID
+      
+
+  layout: 
+    sequence: 20
+    parent-region: No Parent
+    slot: BODY
+    start-new-layout: false
+    start-new-row: false
+    column: Automatic
+    new-column: false
+    column-span: Automatic
+
+  appearance: 
+    template: Interactive Report
+    template-options: 
+    - '#DEFAULT#'
+    - t-IRR-region--hideHeader js-addHiddenHeadingRoleDesc
+    render-components: Above Content
+
+  accessibility: 
+    use-landmark: true
+    landmark-type: Template Default
+
+  advanced: 
+    static-id: ig_uefi
+    region-display-selector: false
+    exclude-title-from-translation: false
+
+  customization: 
+    customizable: Not Customizable By End Users
+
+  attributes: 
+    id: 123190824024597027248
+    edit: 
+      enabled: true
+      allowed-operations: 
+      - Add Row
+      - Update Row
+      - Delete Row
+      lost-update-type: Row Values
+      add-row-if-empty: true
+
+    performance: 
+      lazy-loading: false
+
+    appearance: 
+      select-first-row: true
+      fixed-row-height: true
+
+    pagination: 
+      type: Scroll
+      show-total-count: true
+
+    toolbar: 
+      show: true
+      controls: 
+      - Search Column Selection
+      - Search Field
+      - Actions Menu
+      - Reset Button
+      - Save Button
+
+    enable-users-to: 
+      save-public-report: false
+      flashback: true
+      define-chart-view: true
+      download: true
+
+    download: 
+      formats: 
+      - CSV
+      - HTML
+      - Excel
+      - PDF
+      send-as-email: true
+
+    heading: 
+      fixed-to: Page
+
+    icon-view: 
+      show: false
+
+    detail-view: 
+      show: false
+
+    saved-reports: 
+    - # ====== Saved Report: Primary Report ========================
+      id: 124241003067325247117
+      identification: 
+        name: Primary Report
+        alias: 1242410031
+
+  columns: 
+  - # ====== Column: FEATURE_NAME ================================
+    id: 123190824274716027250
+    identification: 
+      column-name: FEATURE_NAME
+      type: Display Only
+
+    heading: 
+      heading: Feature Name
+      alignment: start
+
+    settings: 
+      format: Plain Text
+      based-on: Item Value
+
+    layout: 
+      sequence: 40
+      column-alignment: start
+      stretch: Use Report Setting
+
+    accessibility: 
+      value-identifies-row: false
+
+    source: 
+      type: Database Column
+      database-column: FEATURE_NAME
+      data-type: VARCHAR2
+      query-only: false
+      primary-key: false
+
+    default: 
+      duplicate-copies-existing-value: true
+
+    session-state: 
+      data-type: VARCHAR2
+
+    column-filter: 
+      enabled: true
+      performance-impacting-operators: 
+      - Contains
+      - Starts With
+      - Case Insensitive
+      - Regular Expression
+      text-case: Mixed
+      lov-type: Distinct Column
+      exact-match: true
+
+    export-/-printing: 
+      include-in-export-/-print: true
+
+    enable-users-to: 
+      sort: true
+      control-break/aggregate: true
+      hide: false
+
+  - # ====== Column: DESCRIPTION =================================
+    id: 124240598962674865501
+    identification: 
+      column-name: DESCRIPTION
+      type: Textarea
+
+    heading: 
+      heading: Description
+      alignment: start
+
+    settings: 
+      resizable: true
+      auto-height: false
+      character-counter: false
+      trim-spaces: Leading and Trailing
+
+    layout: 
+      sequence: 50
+      column-alignment: start
+      stretch: Use Report Setting
+
+    accessibility: 
+      value-identifies-row: false
+
+    validation: 
+      value-required: false
+      maximum-length: 200
+
+    source: 
+      type: Database Column
+      database-column: DESCRIPTION
+      data-type: VARCHAR2
+      query-only: false
+      primary-key: false
+
+    default: 
+      duplicate-copies-existing-value: true
+
+    session-state: 
+      data-type: VARCHAR2
+
+    column-filter: 
+      enabled: true
+      performance-impacting-operators: 
+      - Contains
+      - Starts With
+      - Case Insensitive
+      - Regular Expression
+      text-case: Mixed
+      lov-type: None
+
+    export-/-printing: 
+      include-in-export-/-print: true
+
+    enable-users-to: 
+      sort: true
+      control-break/aggregate: true
+      hide: false
+
+    read-only: 
+      type: Never
+
+  - # ====== Column: STATE_CODE ==================================
+    id: 124240599000285865502
+    identification: 
+      column-name: STATE_CODE
+      type: Radio Group
+
+    heading: 
+      heading: State
+      alignment: center
+
+    settings: 
+      number-of-columns: 1
+
+    layout: 
+      sequence: 60
+      column-alignment: start
+      stretch: Use Report Setting
+
+    accessibility: 
+      value-identifies-row: false
+
+    validation: 
+      value-required: false
+
+    list-of-values: 
+      type: Static Values
+      static-values: 'STATIC:Working;WORKING,Not Working;NOT_WORKING,Unknown;UNKNOWN'
+      display-extra-values: true
+      display-null-value: true
+
+    source: 
+      type: Database Column
+      database-column: STATE_CODE
+      data-type: VARCHAR2
+      query-only: false
+      primary-key: false
+
+    default: 
+      duplicate-copies-existing-value: true
+
+    column-filter: 
+      enabled: true
+      performance-impacting-operators: 
+      - Contains
+      - Starts With
+      - Case Insensitive
+      - Regular Expression
+      text-case: Mixed
+      lov-type: Use List of Values
+      exact-match: true
+
+    export-/-printing: 
+      include-in-export-/-print: false
+
+    enable-users-to: 
+      sort: false
+      hide: true
+
+    security: 
+      escape-special-characters: true
+
+  - # ====== Column: APEX$ROW_ACTION =============================
+    id: 124240601967644865531
+    identification: 
+      column-name: APEX$ROW_ACTION
+      type: Actions Menu
+
+    layout: 
+      sequence: 20
+
+  - # ====== Column: APEX$ROW_SELECTOR ===========================
+    id: 124240602045122865532
+    identification: 
+      column-name: APEX$ROW_SELECTOR
+      type: Row Selector
+
+    settings: 
+      enable-multi-select: true
+      show-select-all: true
+      hide-control: false
+
+    layout: 
+      sequence: 10
+
+  - # ====== Column: FEATURE_ID ==================================
+    id: 124240603474507865546
+    identification: 
+      column-name: FEATURE_ID
+      type: Hidden
+
+    settings: 
+      value-protected: true
+
+    layout: 
+      sequence: 70
+
+    accessibility: 
+      value-identifies-row: false
+
+    source: 
+      type: Database Column
+      database-column: FEATURE_ID
+      data-type: NUMBER
+      query-only: true
+      primary-key: true
+
+    session-state: 
+      data-type: VARCHAR2
+
+    export-/-printing: 
+      include-in-export-/-print: false
+
+    enable-users-to: 
+      sort: false
+
+  printing: 
+    page: 
+      size: Letter
+      orientation: Landscape
+      units: Inches
+      width: 11
+      height: 8.5
+      border-width: 0.5
+      border-color: '#666666'
+
+    page-header: 
+      font: Helvetica
+      font-weight: Normal
+      font-size: 12
+      font-color: '#000000'
+      alignment: center
+
+    column-headings: 
+      font: Helvetica
+      font-weight: Bold
+      font-size: 10
+      font-color: '#000000'
+      background-color: '#EEEEEE'
+
+    columns: 
+      font: Helvetica
+      font-weight: Normal
+      font-size: 10
+      font-color: '#000000'
+      background-color: '#FFFFFF'
+
+    page-footer: 
+      font: Helvetica
+      font-weight: Normal
+      font-size: 12
+      font-color: '#000000'
+      alignment: center
+
+- # ====== Region: Device Details Editor =======================
+  id: 124231950440425874017
+  identification: 
+    name: Device Details Editor
+    type: Form
+
+  source: 
+    location: Local Database
+    type: Table / View
+    table-owner: Parsing Schema
+    table-name: DEVICE_DETAILS
+    include-rowid-column: false
+
+  layout: 
+    sequence: 10
+    parent-region: No Parent
+    slot: BODY
+    start-new-layout: false
+    start-new-row: true
+    column: Automatic
+    new-column: true
+    column-span: Automatic
+
+  appearance: 
+    template: Blank with Attributes
+    template-options: 
+    - '#DEFAULT#'
+    render-components: Above Content
+
+  accessibility: 
+    use-landmark: true
+    landmark-type: Template Default
+
+  advanced: 
+    region-display-selector: false
+    exclude-title-from-translation: false
+
+  customization: 
+    customizable: Not Customizable By End Users
+
+  attributes: 
+    edit: 
+      enabled: true
+      allowed-operations: 
+      - Add Row
+      - Update Row
+      - Delete Row
+      lost-update-type: Row Values
+
+- # ====== Region: Buttons =====================================
+  id: 124231954439089874022
+  identification: 
+    name: Buttons
+    type: Static Content
+
+  layout: 
+    sequence: 20
+    parent-region: No Parent
+    slot: REGION_POSITION_03
+    start-new-layout: false
+    start-new-row: true
+    column: Automatic
+    new-column: true
+    column-span: Automatic
+
+  appearance: 
+    template: Buttons Container
+    template-options: 
+    - '#DEFAULT#'
+    render-components: Above Content
+
+  accessibility: 
+    use-landmark: true
+    landmark-type: Template Default
+
+  advanced: 
+    region-display-selector: false
+    exclude-title-from-translation: false
+
+  customization: 
+    customizable: Not Customizable By End Users
+
+  attributes: 
+    settings: 
+      output-as: Text (escape special characters)
+      show-line-breaks: true
+
+page-items: 
+- # ====== Page Item: P4_CODENAME ==============================
+  id: 123190823336749027241
+  identification: 
+    name: P4_CODENAME
+    type: Text Field
+
+  label: 
+    label: Codename of device
+    alignment: Left
+
+  settings: 
+    subtype: Text
+    trim-spaces: Leading and Trailing
+    text-case: NO CHANGE
+    submit-when-enter-pressed: false
+    disabled: false
+
+  layout: 
+    sequence: 90
+    region: Device Details Editor # 124231950440425874017
+    slot: BODY
+    alignment: Left
+    start-new-layout: false
+    start-new-row: false
+    column: Automatic
+    new-column: true
+    column-span: Automatic
+    label-column-span: Page Template Default
+
+  appearance: 
+    template: Optional - Floating
+    template-options: 
+    - '#DEFAULT#'
+    width: 30
+
+  validation: 
+    value-required: false
+
+  advanced: 
+    warn-on-unsaved-changes: Page Default
+
+  source: 
+    type: Null
+    used: Only when current value in session state is null
+
+  session-state: 
+    storage: Per Session (Persistent)
+
+  quick-picks: 
+    show-quick-picks: false
+
+  security: 
+    session-state-protection: Unrestricted
+    store-value-encrypted-in-session-state: true
+    restricted-characters: All characters can be saved.
+
+- # ====== Page Item: P4_MAINTAINER ============================
+  id: 123190823494469027242
+  identification: 
+    name: P4_MAINTAINER
+    type: Text Field
+
+  label: 
+    label: Maintainer
+    alignment: Left
+
+  settings: 
+    subtype: Text
+    trim-spaces: Leading and Trailing
+    text-case: NO CHANGE
+    submit-when-enter-pressed: false
+    disabled: false
+
+  layout: 
+    sequence: 100
+    region: Device Details Editor # 124231950440425874017
+    slot: BODY
+    alignment: Left
+    start-new-layout: false
+    start-new-row: true
+    column: Automatic
+    new-column: true
+    column-span: Automatic
+    label-column-span: Page Template Default
+
+  appearance: 
+    template: Optional - Floating
+    template-options: 
+    - '#DEFAULT#'
+    width: 30
+
+  validation: 
+    value-required: false
+
+  advanced: 
+    warn-on-unsaved-changes: Page Default
+
+  source: 
+    type: Null
+    used: Only when current value in session state is null
+
+  session-state: 
+    storage: Per Session (Persistent)
+
+  quick-picks: 
+    show-quick-picks: false
+
+  security: 
+    session-state-protection: Unrestricted
+    store-value-encrypted-in-session-state: true
+    restricted-characters: All characters can be saved.
+
+- # ====== Page Item: P4_CONTRIBUTORS ==========================
+  id: 123190823540034027243
+  identification: 
+    name: P4_CONTRIBUTORS
+    type: Text Field
+
+  label: 
+    label: Contributors
+    alignment: Left
+
+  settings: 
+    subtype: Text
+    trim-spaces: Leading and Trailing
+    text-case: NO CHANGE
+    submit-when-enter-pressed: false
+    disabled: false
+
+  layout: 
+    sequence: 110
+    region: Device Details Editor # 124231950440425874017
+    slot: BODY
+    alignment: Left
+    start-new-layout: false
+    start-new-row: true
+    column: Automatic
+    new-column: true
+    column-span: Automatic
+    label-column-span: Page Template Default
+
+  appearance: 
+    template: Optional - Floating
+    template-options: 
+    - '#DEFAULT#'
+    width: 30
+
+  validation: 
+    value-required: false
+
+  advanced: 
+    warn-on-unsaved-changes: Page Default
+
+  source: 
+    type: Null
+    used: Only when current value in session state is null
+
+  session-state: 
+    storage: Per Session (Persistent)
+
+  quick-picks: 
+    show-quick-picks: false
+
+  security: 
+    session-state-protection: Unrestricted
+    store-value-encrypted-in-session-state: true
+    restricted-characters: All characters can be saved.
+
+- # ====== Page Item: P4_TESTERS ===============================
+  id: 123190823622408027244
+  identification: 
+    name: P4_TESTERS
+    type: Text Field
+
+  label: 
+    label: Testers
+    alignment: Left
+
+  settings: 
+    subtype: Text
+    trim-spaces: Leading and Trailing
+    text-case: NO CHANGE
+    submit-when-enter-pressed: false
+    disabled: false
+
+  layout: 
+    sequence: 120
+    region: Device Details Editor # 124231950440425874017
+    slot: BODY
+    alignment: Left
+    start-new-layout: false
+    start-new-row: true
+    column: Automatic
+    new-column: true
+    column-span: Automatic
+    label-column-span: Page Template Default
+
+  appearance: 
+    template: Optional - Floating
+    template-options: 
+    - '#DEFAULT#'
+    width: 30
+
+  validation: 
+    value-required: false
+
+  advanced: 
+    warn-on-unsaved-changes: Page Default
+
+  source: 
+    type: Null
+    used: Only when current value in session state is null
+
+  session-state: 
+    storage: Per Session (Persistent)
+
+  quick-picks: 
+    show-quick-picks: false
+
+  security: 
+    session-state-protection: Unrestricted
+    store-value-encrypted-in-session-state: true
+    restricted-characters: All characters can be saved.
+
+- # ====== Page Item: P4_ACTIVE ================================
+  id: 123190823703386027245
+  identification: 
+    name: P4_ACTIVE
+    type: Select List
+
+  label: 
+    label: Active State
+    alignment: Left
+
+  settings: 
+    page-action-on-selection: None
+
+  multiple-values: 
+    type: No
+
+  layout: 
+    sequence: 60
+    region: Device Details Editor # 124231950440425874017
+    slot: BODY
+    alignment: Left
+    start-new-layout: false
+    start-new-row: true
+    column: Automatic
+    new-column: true
+    column-span: Automatic
+    label-column-span: Page Template Default
+
+  appearance: 
+    template: Optional - Floating
+    template-options: 
+    - '#DEFAULT#'
+    height: 1
+
+  validation: 
+    value-required: false
+
+  list-of-values: 
+    type: Static Values
+    static-values: 'STATIC:Active;Y,Inactive;N'
+    display-extra-values: true
+    display-null-value: false
+
+  advanced: 
+    warn-on-unsaved-changes: Page Default
+
+  source: 
+    form-region: Device Details Editor # 124231950440425874017
+    column: ACTIVE_FLAG
+    data-type: VARCHAR2
+    query-only: false
+    primary-key: false
+
+  session-state: 
+    storage: Per Request (Memory Only)
+
+  quick-picks: 
+    show-quick-picks: false
+
+  security: 
+    session-state-protection: Unrestricted
+    store-value-encrypted-in-session-state: true
+    restricted-characters: All characters can be saved.
+
+- # ====== Page Item: P4_CATEGORY_ID ===========================
+  id: 123190823868078027246
+  identification: 
+    name: P4_CATEGORY_ID
+    type: Select List
+
+  label: 
+    label: Category
+    alignment: Left
+
+  settings: 
+    page-action-on-selection: None
+
+  multiple-values: 
+    type: No
+
+  layout: 
+    sequence: 20
+    region: Device Details Editor # 124231950440425874017
+    slot: BODY
+    alignment: Left
+    start-new-layout: false
+    start-new-row: true
+    column: Automatic
+    new-column: true
+    column-span: Automatic
+    label-column-span: Page Template Default
+
+  appearance: 
+    template: Optional - Floating
+    template-options: 
+    - '#DEFAULT#'
+    height: 1
+
+  validation: 
+    value-required: false
+
+  list-of-values: 
+    type: SQL Query
+    sql-query: |
+      SELECT category_name d, category_id r
+      FROM categories
+      ORDER BY category_name
+    display-extra-values: true
+    display-null-value: true
+    null-display-value: '-- Select Category --'
+
+  advanced: 
+    warn-on-unsaved-changes: Page Default
+
+  source: 
+    type: Null
+    used: Only when current value in session state is null
+
+  session-state: 
+    storage: Per Session (Persistent)
+
+  quick-picks: 
+    show-quick-picks: false
+
+  security: 
+    session-state-protection: Unrestricted
+    store-value-encrypted-in-session-state: true
+    restricted-characters: All characters can be saved.
+
+- # ====== Page Item: P4_DEVICE_ID =============================
+  id: 124240600178652865513
+  identification: 
+    name: P4_DEVICE_ID
+    type: Select List
+
+  label: 
+    label: Device
+    alignment: Left
+
+  settings: 
+    page-action-on-selection: None
+
+  multiple-values: 
+    type: No
+
+  layout: 
+    sequence: 50
+    region: Device Details Editor # 124231950440425874017
+    slot: BODY
+    alignment: Left
+    start-new-layout: false
+    start-new-row: false
+    column: Automatic
+    new-column: false
+    column-span: Automatic
+    label-column-span: Page Template Default
+
+  appearance: 
+    template: Optional - Floating
+    template-options: 
+    - '#DEFAULT#'
+    height: 1
+
+  validation: 
+    value-required: true
+
+  list-of-values: 
+    type: SQL Query
+    sql-query: |
+      SELECT device_name d, device_id r
+      FROM devices
+      WHERE soc_id = :P4_SOC_ID
+        AND manufacturer_id = :P4_MANUFACTURER_ID
+      ORDER BY device_name
+      
+    display-extra-values: true
+    display-null-value: true
+    null-display-value: '-- Select Device --'
+
+  cascading-list-of-values: 
+    parent-item(s): 
+    - P4_MANUFACTURER_ID
+    items-to-submit: 
+    - P4_MANUFACTURER_ID
+    parent-required: true
+
+  advanced: 
+    warn-on-unsaved-changes: Page Default
+
+  source: 
+    form-region: Device Details Editor # 124231950440425874017
+    column: DEVICE_ID
+    data-type: NUMBER
+    query-only: false
+    primary-key: true
+
+  session-state: 
+    storage: Per Request (Memory Only)
+
+  quick-picks: 
+    show-quick-picks: false
+
+  security: 
+    session-state-protection: Checksum Required - Session Level
+    store-value-encrypted-in-session-state: true
+    restricted-characters: All characters can be saved.
+
+- # ====== Page Item: P4_STATE =================================
+  id: 124240600626991865518
+  identification: 
+    name: P4_STATE
+    type: Hidden
+
+  settings: 
+    value-protected: true
+
+  layout: 
+    sequence: 70
+    region: Device Details Editor # 124231950440425874017
+    slot: BODY
+
+  advanced: 
+    warn-on-unsaved-changes: Page Default
+
+  source: 
+    form-region: Device Details Editor # 124231950440425874017
+    column: STATE
+    data-type: VARCHAR2
+    query-only: false
+    primary-key: false
+
+  session-state: 
+    data-type: VARCHAR2
+    storage: Per Request (Memory Only)
+
+  security: 
+    session-state-protection: Unrestricted
+    store-value-encrypted-in-session-state: true
+    restricted-characters: All characters can be saved.
+
+- # ====== Page Item: P4_ACTIVE_FLAG ===========================
+  id: 124240601183443865523
+  identification: 
+    name: P4_ACTIVE_FLAG
+    type: Hidden
+
+  settings: 
+    value-protected: true
+
+  layout: 
+    sequence: 80
+    region: Device Details Editor # 124231950440425874017
+    slot: BODY
+
+  advanced: 
+    warn-on-unsaved-changes: Page Default
+
+  source: 
+    type: Null
+    used: Only when current value in session state is null
+
+  session-state: 
+    data-type: VARCHAR2
+    storage: Per Session (Persistent)
+
+  security: 
+    session-state-protection: Unrestricted
+    store-value-encrypted-in-session-state: true
+    restricted-characters: All characters can be saved.
+
+- # ====== Page Item: P4_SOC_ID ================================
+  id: 124240601227173865524
+  identification: 
+    name: P4_SOC_ID
+    type: Select List
+
+  label: 
+    label: SoC
+    alignment: Left
+
+  settings: 
+    page-action-on-selection: None
+
+  multiple-values: 
+    type: No
+
+  layout: 
+    sequence: 40
+    region: Device Details Editor # 124231950440425874017
+    slot: BODY
+    alignment: Left
+    start-new-layout: false
+    start-new-row: false
+    column: Automatic
+    new-column: true
+    column-span: Automatic
+    label-column-span: Page Template Default
+
+  appearance: 
+    template: Optional - Floating
+    template-options: 
+    - '#DEFAULT#'
+    height: 1
+
+  validation: 
+    value-required: true
+
+  list-of-values: 
+    type: Shared Component
+    list-of-values: SOCS.SOC_NAME # 123384581776145730596
+    display-extra-values: true
+    display-null-value: true
+    null-display-value: '-- Select SoC --'
+
+  cascading-list-of-values: 
+    parent-item(s): 
+    - P4_CATEGORY_ID
+    items-to-submit: 
+    - P4_CATEGORY_ID
+    parent-required: true
+
+  advanced: 
+    warn-on-unsaved-changes: Page Default
+
+  source: 
+    type: Null
+    used: Only when current value in session state is null
+
+  session-state: 
+    storage: Per Session (Persistent)
+
+  quick-picks: 
+    show-quick-picks: false
+
+  security: 
+    session-state-protection: Unrestricted
+    store-value-encrypted-in-session-state: true
+    restricted-characters: All characters can be saved.
+
+- # ====== Page Item: P4_MANUFACTURER_ID =======================
+  id: 124240601411525865526
+  identification: 
+    name: P4_MANUFACTURER_ID
+    type: Select List
+
+  label: 
+    label: 'Manufacturer '
+    alignment: Left
+
+  settings: 
+    page-action-on-selection: None
+
+  multiple-values: 
+    type: No
+
+  layout: 
+    sequence: 30
+    region: Device Details Editor # 124231950440425874017
+    slot: BODY
+    alignment: Left
+    start-new-layout: false
+    start-new-row: false
+    column: Automatic
+    new-column: false
+    column-span: Automatic
+    label-column-span: Page Template Default
+
+  appearance: 
+    template: Optional - Floating
+    template-options: 
+    - '#DEFAULT#'
+    height: 1
+
+  validation: 
+    value-required: true
+
+  list-of-values: 
+    type: SQL Query
+    sql-query: |
+      SELECT manufacturer_name d, manufacturer_id r
+      FROM manufacturers
+      WHERE soc_id = :P4_SOC_ID
+      ORDER BY manufacturer_name
+    display-extra-values: true
+    display-null-value: true
+    null-display-value: '-- Select Manufacturer --'
+
+  cascading-list-of-values: 
+    parent-item(s): 
+    - P4_SOC_ID
+    parent-required: true
+
+  advanced: 
+    warn-on-unsaved-changes: Page Default
+
+  source: 
+    type: Null
+    used: Only when current value in session state is null
+
+  session-state: 
+    storage: Per Session (Persistent)
+
+  quick-picks: 
+    show-quick-picks: false
+
+  security: 
+    session-state-protection: Unrestricted
+    store-value-encrypted-in-session-state: true
+    restricted-characters: All characters can be saved.
+
+buttons: 
+- # ====== Button: CANCEL ======================================
+  id: 124231954862638874023
+  identification: 
+    button-name: CANCEL
+    label: Cancel
+
+  layout: 
+    sequence: 10
+    region: Buttons # 124231954439089874022
+    slot: CLOSE
+    start-new-layout: false
+    start-new-row: true
+    column: Automatic
+    new-column: true
+    column-span: Automatic
+
+  appearance: 
+    button-template: Text
+    hot: false
+    template-options: 
+    - '#DEFAULT#'
+
+  behavior: 
+    action: Defined by Dynamic Action
+    execute-validations: true
+
+- # ====== Button: SAVE ========================================
+  id: 124231957072420874025
+  identification: 
+    button-name: SAVE
+    label: SAVE
+
+  layout: 
+    sequence: 40
+    region: Buttons # 124231954439089874022
+    slot: NEXT
+    start-new-layout: false
+    start-new-row: true
+    column: Automatic
+    new-column: true
+    column-span: Automatic
+
+  appearance: 
+    button-template: Text
+    hot: true
+    template-options: 
+    - '#DEFAULT#'
+
+  behavior: 
+    action: Submit Page
+    execute-validations: true
+    show-processing: false
+    warn-on-unsaved-changes: Do Not Check
+    database-action: SQL INSERT action
+
+  advanced: 
+    static-id: SAVE_DEVICE
+
+dynamic-actions: 
+- # ====== Dynamic Action: Cancel Dialog =======================
+  id: 124231954964136874023
+  identification: 
+    name: Cancel Dialog
+
+  execution: 
+    sequence: 10
+    event-scope: Static
+    type: Immediate
+
+  when: 
+    event: Click
+    selection-type: Button
+    button: CANCEL # 124231954862638874023
+
+  actions: 
+  - # ====== Action: Cancel Dialog ===============================
+    id: 124231955722306874024
+    identification: 
+      action: Cancel Dialog
+
+    execution: 
+      sequence: 10
+      event: Cancel Dialog # 124231954964136874023
+      fire-when-event-result-is: True
+      fire-on-initialization: false
+
+processes: 
+- # ====== Process: Initialize form Device Details Editor ======
+  id: 124231957402282874026
+  identification: 
+    name: Initialize form Device Details Editor
+    type: Form - Initialization
+    execution-chain: None
+    form-region: Device Details Editor # 124231950440425874017
+
+  execution: 
+    sequence: 10
+    point: Before Header
+    run-process: Once Per Page Visit (default)
+
+- # ====== Process: Process form Device Details Editor =========
+  id: 124231957841426874026
+  identification: 
+    name: Process form Device Details Editor
+    type: Form - Automatic Row Processing (DML)
+    execution-chain: None
+    form-region: Device Details Editor # 124231950440425874017
+
+  settings: 
+    target-type: PL/SQL Code
+    pl/sql-code-to-insert/update/delete: |
+      declare
+        l_dev_id number := to_number(nvl(:P4_DEVICE_ID, 0));
+      begin
+        if l_dev_id = 0 then
+          raise_application_error(-20001, 'Device ID is required.');
+        end if;
+      
+        merge into device_details dd
+        using (select l_dev_id dev_id from dual) src
+        on (dd.device_id = src.dev_id)
+        when matched then
+          update set
+            dd.codename     = :P4_CODENAME,
+            dd.maintainer   = :P4_MAINTAINER,
+            dd.contributors = :P4_CONTRIBUTORS,
+            dd.testers      = :P4_TESTERS,
+            dd.state        = :P4_STATE,
+            dd.active_flag  = :P4_ACTIVE
+        when not matched then
+          insert (device_id, codename, maintainer, contributors, testers, state, active_flag)
+          values (l_dev_id, :P4_CODENAME, :P4_MAINTAINER, :P4_CONTRIBUTORS, :P4_TESTERS, :P4_STATE, :P4_ACTIVE);
+      
+        commit;
+      end;
+    prevent-lost-updates: true
+    lock-row: Yes
+
+  execution: 
+    sequence: 10
+    point: Processing
+    run-process: Once Per Page Visit (default)
+
+  error: 
+    display-location: Inline in Notification
+
+  server-side-condition: 
+    when-button-pressed: SAVE # 124231957072420874025
+
+- # ====== Process: Close Dialog ===============================
+  id: 124231958218522874026
+  identification: 
+    name: Close Dialog
+    type: Close Dialog
+    execution-chain: None
+
+  settings: 
+    show-success-messages: true
+
+  execution: 
+    sequence: 50
+    point: Processing
+    run-process: Once Per Page Visit (default)
+
+  error: 
+    display-location: Inline in Notification
+
+  server-side-condition: 
+    type: Request is contained in Value
+    value: CREATE,SAVE,DELETE
+
+- # ====== Process: New - Save Interactive Grid Data ===========
+  id: 124240602175296865533
+  identification: 
+    name: New - Save Interactive Grid Data
+    type: Interactive Grid - Automatic Row Processing (DML)
+    execution-chain: None
+    editable-region: New # 123190823991659027247
+
+  settings: 
+    target-type: Table / View
+    table-owner: PARSING SCHEMA
+    table-name: DEVICE_UEFI_STATUS
+    prevent-lost-updates: true
+    lock-row: Yes
+    return-primary-key(s)-after-insert: true
+
+  execution: 
+    sequence: 70
+    point: Processing
+    run-process: Once Per Page Visit (default)
+
+  success-message: 
+    success-message: success!
+
+  error: 
+    error-message: Error
+    display-location: Inline in Notification
+
+  server-side-condition: 
+    when-button-pressed: SAVE # 124231957072420874025
+    execution-scope: For Created and Modified Rows
+
+- # ====== Process: New ========================================
+  id: 124240602207062865534
+  identification: 
+    name: New
+    type: Interactive Grid - Automatic Row Processing (DML)
+    execution-chain: None
+    editable-region: Device Details Editor # 124231950440425874017
+
+  settings: 
+    target-type: Table / View
+    table-owner: PARSING SCHEMA
+    table-name: DEVICE_DETAILS
+    prevent-lost-updates: true
+    lock-row: Yes
+    return-primary-key(s)-after-insert: true
+
+  execution: 
+    sequence: 80
+    point: Processing
+    run-process: Once Per Page Visit (default)
+
+  success-message: 
+    success-message: Success!
+
+  error: 
+    error-message: Error
+    display-location: Inline in Notification
+
+  server-side-condition: 
+    when-button-pressed: SAVE # 124231957072420874025
+    execution-scope: For Created and Modified Rows
+
+- # ====== Process: SAVE_DEVICE_UEFI ===========================
+  id: 124240602306845865535
+  identification: 
+    name: SAVE_DEVICE_UEFI
+    type: Execute Code
+    execution-chain: None
+
+  source: 
+    location: Local Database
+    language: PL/SQL
+    pl/sql-code: |
+      declare
+        l_dev_id    number := to_number(nvl(apex_application.g_x01,'0'));
+        l_payload   clob   := nvl(apex_application.g_x02,'{}');
+      
+        l_cnt       number;
+        l_i         pls_integer;
+      
+        l_feature_id     number;
+        l_feature_name   varchar2(4000);
+        l_desc           varchar2(4000);
+        l_state_raw      varchar2(4000);
+        l_state          varchar2(20); -- increase to permit 'NOT_WORKING'
+      
+        -- optional header fields
+        l_header_codename     varchar2(4000);
+        l_header_maintainer   varchar2(4000);
+        l_header_contributors varchar2(4000);
+        l_header_testers      varchar2(4000);
+        l_header_active       varchar2(10);
+      
+        l_after_count number;
+      begin
+        apex_debug.message('SAVE_DEVICE_UEFI: device_id=%s', l_dev_id);
+        apex_debug.message('SAVE_DEVICE_UEFI payload (trunc 32k): %s', substr(l_payload,1,32000));
+      
+        -- parse payload (will raise if not valid JSON)
+        apex_json.parse(l_payload);
+      
+        -- optional header extraction (safe)
+        begin
+          l_header_codename     := apex_json.get_varchar2('header.codename');
+          l_header_maintainer   := apex_json.get_varchar2('header.maintainer');
+          l_header_contributors := apex_json.get_varchar2('header.contributors');
+          l_header_testers      := apex_json.get_varchar2('header.testers');
+          l_header_active       := apex_json.get_varchar2('header.active');
+        exception when others then
+          null;
+        end;
+      
+        -- upsert device_details (non-blocking)
+        if l_dev_id > 0 then
+          begin
+            merge into device_details dd
+            using (select l_dev_id dev from dual) src
+            on (dd.device_id = src.dev)
+            when matched then
+              update set
+                dd.codename     = case when l_header_codename is not null then l_header_codename else dd.codename end,
+                dd.maintainer   = case when l_header_maintainer is not null then l_header_maintainer else dd.maintainer end,
+                dd.contributors = case when l_header_contributors is not null then l_header_contributors else dd.contributors end,
+                dd.testers      = case when l_header_testers is not null then l_header_testers else dd.testers end,
+                dd.active_flag  = case when l_header_active is not null then l_header_active else dd.active_flag end
+            when not matched then
+              insert (device_id, codename, maintainer, contributors, testers, active_flag)
+              values (l_dev_id, l_header_codename, l_header_maintainer, l_header_contributors, l_header_testers, l_header_active);
+            apex_debug.message('SAVE_DEVICE_UEFI: device_details merge OK for %s', l_dev_id);
+          exception
+            when others then
+              apex_debug.message('SAVE_DEVICE_UEFI: device_details merge ERROR: %s', sqlerrm);
+          end;
+        else
+          apex_debug.message('SAVE_DEVICE_UEFI: l_dev_id is zero or invalid');
+        end if;
+      
+        -- process uefi array
+        l_cnt := apex_json.get_count('uefi');
+        apex_debug.message('UEFI COUNT = %s', l_cnt);
+      
+        for l_i in 1..l_cnt loop
+          begin
+            -- defaults
+            l_feature_id   := null;
+            l_feature_name := null;
+            l_desc         := null;
+            l_state_raw    := null;
+            l_state        := 'UNTESTED';
+      
+            -- feature_id (optional)
+            begin
+              l_feature_id := apex_json.get_number('uefi[%d].feature_id', l_i);
+            exception when others then
+              l_feature_id := null;
+            end;
+      
+            -- resolve feature_name via id if provided
+            if l_feature_id is not null then
+              begin
+                select feature_name
+                into l_feature_name
+                from uefi_master_list
+                where feature_id = l_feature_id;
+              exception
+                when no_data_found then
+                  apex_debug.message('Row %s: feature_id %s not found in master list', l_i, l_feature_id);
+                  l_feature_name := null;
+                when others then
+                  apex_debug.message('Row %s: feature_id lookup error %s', l_i, sqlerrm);
+                  l_feature_name := null;
+              end;
+            end if;
+      
+            -- fallback: read feature_name directly from payload
+            begin
+              if l_feature_name is null then
+                l_feature_name := apex_json.get_varchar2('uefi[%d].feature_name', l_i);
+              end if;
+            exception when others then
+              l_feature_name := null;
+            end;
+      
+            -- description
+            begin
+              l_desc := apex_json.get_varchar2('uefi[%d].description', l_i);
+            exception when others then
+              l_desc := null;
+            end;
+      
+            -- raw state (may be many forms from JS)
+            begin
+              l_state_raw := apex_json.get_varchar2('uefi[%d].state', l_i);
+            exception when others then
+              l_state_raw := null;
+            end;
+      
+            -- normalize state (server-side) — canonical values: NOT_WORKING, WORKING, UNKNOWN, UNTESTED
+            begin
+              -- unify to upper & replace whitespace/hyphen with underscore
+              l_state := upper(trim(nvl(l_state_raw, '')));
+              l_state := regexp_replace(l_state, '[\s\-]+', '_');
+      
+              -- exact matches first (include common variants)
+              if l_state in (
+                   'NOT_WORK', 'NOT_WORKING', 'NOTWORK', 'NOTWORKING', 'FAIL', 'FALSE', 'NO', 'BROKEN'
+                 ) then
+                l_state := 'NOT_WORKING';
+      
+              elsif l_state in (
+                   'WORKING', 'OK', 'TRUE', 'PASS', 'YES', 'Y', '1', 'ACTIVE'
+                 ) then
+                l_state := 'WORKING';
+      
+              elsif l_state in (
+                   'UNKNOWN', 'N/A', 'NA', '?', 'NONE'
+                 ) then
+                l_state := 'UNKNOWN';
+      
+              elsif l_state in (
+                   'WARN', 'WARNING', 'WIP', 'PARTIAL', 'LIMITED', 'DEGRADED'
+                 ) then
+                l_state := 'UNKNOWN';
+      
+              else
+                -- fuzzy fallback: check negative/failure tokens first
+                if instr(l_state, 'NOT') > 0 or instr(l_state, 'FAIL') > 0 or instr(l_state, 'FALSE') > 0 or instr(l_state, 'NO') > 0 then
+                  l_state := 'NOT_WORKING';
+                elsif instr(l_state, 'WORK') > 0 or instr(l_state, 'OK') > 0 then
+                  l_state := 'WORKING';
+                elsif instr(l_state, '?') > 0 or instr(l_state, 'UNKNOWN') > 0 then
+                  l_state := 'UNKNOWN';
+                else
+                  l_state := 'UNTESTED';
+                end if;
+              end if;
+            exception when others then
+              l_state := 'UNTESTED';
+            end;
+      
+            apex_debug.message('Row %s >>> fid=%s fname=%s desc=%s raw_state=%s norm_state=%s',
+                               l_i,
+                               nvl(to_char(l_feature_id),'<null>'),
+                               nvl(l_feature_name,'<null>'),
+                               nvl(substr(l_desc,1,200),'<null>'),
+                               nvl(l_state_raw,'<null>'),
+                               nvl(l_state,'<null>'));
+      
+            -- only merge if we have a feature_name and a valid device id
+            if l_dev_id > 0 and l_feature_name is not null then
+              begin
+                merge into device_uefi_status t
+                using (select l_dev_id dev_id, l_feature_name fname from dual) s
+                on (t.device_id = s.dev_id and t.feature_name = s.fname)
+                when matched then
+                  update set t.description = l_desc, t.state_code = l_state
+                when not matched then
+                  insert (device_id, feature_name, description, state_code)
+                  values (l_dev_id, l_feature_name, l_desc, l_state);
+                apex_debug.message('Row %s MERGE OK', l_i);
+              exception
+                when others then
+                  apex_debug.message('Row %s MERGE ERROR: %s', l_i, sqlerrm);
+              end;
+            else
+              apex_debug.message('Row %s skipped (missing feature_name or device_id)', l_i);
+            end if;
+      
+          exception
+            when others then
+              apex_debug.message('Row %s OUTER ERROR: %s', l_i, sqlerrm);
+          end;
+        end loop;
+      
+        commit;
+      
+        -- report how many rows now for this device
+        begin
+          select count(*) into l_after_count from device_uefi_status where device_id = l_dev_id;
+          apex_debug.message('After SAVE: device_uefi_status count for %s = %s', l_dev_id, l_after_count);
+        exception when others then null;
+        end;
+      
+        htp.p('{"ok":true}');
+      exception
+        when others then
+          htp.p('{"ok":false,"error":"' || replace(sqlerrm, '"', '''') || '"}');
+      end;
+      
+
+  execution: 
+    sequence: 90
+    point: Ajax Callback
+    run-process: Once Per Page Visit (default)
+

@@ -3,7 +3,7 @@
 identification: 
   name: Project Silicium
   alias: PROJECT-SILICIUM
-  version: Release 1.0
+  version: Release 1.1
 
 row-search: 
   tokenize: true
@@ -115,7 +115,7 @@ attributes:
   auto-dismiss-success-messages: false
 
 subscription: 
-  version-number: 15688748193369
+  version-number: 15691374800635
 
 substitutions: 
 - # ====== Substitution: APP_NAME ==============================
